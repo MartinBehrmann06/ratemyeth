@@ -1,0 +1,8 @@
+[
+  { "id": "1", "name": "Ethereum", "rating": 1200 },
+  { "id": "2", "name": "Bitcoin", "rating": 1200 },
+  { "id": "3", "name": "Solana", "rating": 1200 },
+  { "id": "4", "name": "Polkadot", "rating": 1200 },
+  { "id": "5", "name": "Cardano", "rating": 1200 },
+  { "id": "6", "name": "Chainlink", "rating": 1200 }
+]
