@@ -3,62 +3,72 @@
 import { useState, useEffect } from "react";
 import { calculateNewRatings } from "@/lib/elo";
 import { createClient } from "@/lib/supabase/client";
+import Image from "next/image";
 
-type Item = {
-  id: string;
+type Professor = {
+  uid: string;
   name: string;
   rating: number;
+  image_url: string | null;
+};
+
+const getImageUrl = (url: string | null) => {
+  if (!url) return "https://via.placeholder.com/150?text=No+Image";
+  if (url.startsWith("/")) return `https://ethz.ch${url}`;
+  return url;
 };
 
 export default function RatePage() {
   const supabase = createClient();
 
-  const [items, setItems] = useState<Item[]>([]);
-  const [itemA, setItemA] = useState<Item | null>(null);
-  const [itemB, setItemB] = useState<Item | null>(null);
+  const [professors, setProfessors] = useState<Professor[]>([]);
+  const [profA, setProfA] = useState<Professor | null>(null);
+  const [profB, setProfB] = useState<Professor | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
-  const pickNewPair = (currentItems: Item[]) => {
-    if (currentItems.length < 2) return;
-    const shuffled = [...currentItems].sort(() => 0.5 - Math.random());
-    setItemA(shuffled[0]);
-    setItemB(shuffled[1]);
+  const pickNewPair = (currentProfs: Professor[]) => {
+    if (currentProfs.length < 2) return;
+    const shuffled = [...currentProfs].sort(() => 0.5 - Math.random());
+    setProfA(shuffled[0]);
+    setProfB(shuffled[1]);
   };
 
   useEffect(() => {
-    const fetchItems = async () => {
-      const { data, error } = await supabase.from("items").select("*");
+    const fetchProfessors = async () => {
+      const { data, error } = await supabase
+        .from("professors")
+        .select("uid, name, rating, image_url");
 
       if (error) {
-        console.error("Error fetching items:", error);
+        console.error("Error fetching professors:", error);
       } else if (data) {
-        setItems(data);
+        setProfessors(data);
         pickNewPair(data);
       }
       setIsLoading(false);
     };
 
-    fetchItems();
+    fetchProfessors();
   }, [supabase]);
 
-  const handleVote = async (winner: Item, loser: Item) => {
+  const handleVote = async (winner: Professor, loser: Professor) => {
     const { newWinnerRating, newLoserRating } = calculateNewRatings(
       winner.rating,
       loser.rating,
     );
 
-    const updatedItems = items.map((item) => {
-      if (item.id === winner.id) return { ...item, rating: newWinnerRating };
-      if (item.id === loser.id) return { ...item, rating: newLoserRating };
-      return item;
+    const updatedProfessors = professors.map((prof) => {
+      if (prof.uid === winner.uid) return { ...prof, rating: newWinnerRating };
+      if (prof.uid === loser.uid) return { ...prof, rating: newLoserRating };
+      return prof;
     });
 
-    setItems(updatedItems);
-    pickNewPair(updatedItems);
+    setProfessors(updatedProfessors);
+    pickNewPair(updatedProfessors);
 
-    const { error } = await supabase.rpc("vote_item", {
-      winner_id: winner.id,
-      loser_id: loser.id,
+    const { error } = await supabase.rpc("vote_professor", {
+      winner_uid: winner.uid,
+      loser_uid: loser.uid,
     });
 
     if (error) {
@@ -66,7 +76,7 @@ export default function RatePage() {
     }
   };
 
-  if (isLoading || !itemA || !itemB)
+  if (isLoading || !profA || !profB)
     return (
       <div className="flex h-screen items-center justify-center">
         Loading arena...
@@ -75,47 +85,75 @@ export default function RatePage() {
 
   return (
     <div className="min-h-screen flex flex-col items-center justify-center p-8 bg-background text-foreground">
-      <h1 className="text-3xl font-bold mb-8">Which is better?</h1>
+      <h1 className="text-3xl font-bold mb-8">Which professor is better?</h1>
 
-      <div className="flex gap-8 mb-12">
+      <div className="flex gap-8 mb-12 items-center">
         <button
-          onClick={() => handleVote(itemA, itemB)}
-          className="flex flex-col items-center justify-center w-64 h-64 border-2 border-border rounded-xl hover:bg-accent hover:text-accent-foreground transition-all duration-200 cursor-pointer"
+          onClick={() => handleVote(profA, profB)}
+          className="flex flex-col items-center justify-center w-72 h-80 border-2 border-border rounded-xl hover:bg-accent hover:border-primary transition-all duration-200 cursor-pointer p-4 group"
         >
-          <span className="text-2xl font-semibold">{itemA.name}</span>
-          <span className="mt-2 text-sm opacity-70">
-            Current Elo: {itemA.rating}
+          <Image
+            src={getImageUrl(profA.image_url)}
+            alt={profA.name}
+            width={128}
+            height={128}
+            className="w-32 h-32 rounded-full object-cover mb-4 border-2 border-transparent group-hover:border-primary transition-colors"
+          />
+          <span className="text-xl font-semibold text-center line-clamp-2">
+            {profA.name}
+          </span>
+          <span className="mt-4 text-sm font-mono opacity-70 bg-secondary px-3 py-1 rounded-full">
+            Elo: {profA.rating}
           </span>
         </button>
 
-        <div className="flex items-center text-xl font-bold text-muted-foreground">
+        <div className="flex items-center text-2xl font-black text-muted-foreground/50 italic">
           VS
         </div>
 
         <button
-          onClick={() => handleVote(itemB, itemA)}
-          className="flex flex-col items-center justify-center w-64 h-64 border-2 border-border rounded-xl hover:bg-accent hover:text-accent-foreground transition-all duration-200 cursor-pointer"
+          onClick={() => handleVote(profB, profA)}
+          className="flex flex-col items-center justify-center w-72 h-80 border-2 border-border rounded-xl hover:bg-accent hover:border-primary transition-all duration-200 cursor-pointer p-4 group"
         >
-          <span className="text-2xl font-semibold">{itemB.name}</span>
-          <span className="mt-2 text-sm opacity-70">
-            Current Elo: {itemB.rating}
+          <img
+            src={getImageUrl(profB.image_url)}
+            alt={profB.name}
+            className="w-32 h-32 rounded-full object-cover mb-4 border-2 border-transparent group-hover:border-primary transition-colors"
+          />
+          <span className="text-xl font-semibold text-center line-clamp-2">
+            {profB.name}
+          </span>
+          <span className="mt-4 text-sm font-mono opacity-70 bg-secondary px-3 py-1 rounded-full">
+            Elo: {profB.rating}
           </span>
         </button>
       </div>
+
       <div className="w-full max-w-md">
         <h2 className="text-xl font-bold mb-4 border-b pb-2">Top Ranked</h2>
-        <ul className="space-y-2">
-          {[...items]
+        <ul className="space-y-3">
+          {[...professors]
             .sort((a, b) => b.rating - a.rating)
-            .map((item, index) => (
+            .slice(0, 10)
+            .map((prof, index) => (
               <li
-                key={item.id}
-                className="flex justify-between p-2 bg-card rounded-md border border-border/50"
+                key={prof.uid}
+                className="flex items-center justify-between p-3 bg-card rounded-lg border border-border/50 shadow-sm"
               >
-                <span>
-                  {index + 1}. {item.name}
+                <div className="flex items-center gap-4 truncate">
+                  <span className="font-bold text-muted-foreground w-4 text-right">
+                    {index + 1}.
+                  </span>
+                  <img
+                    src={getImageUrl(prof.image_url)}
+                    alt={prof.name}
+                    className="w-10 h-10 rounded-full object-cover border border-border"
+                  />
+                  <span className="font-medium truncate">{prof.name}</span>
+                </div>
+                <span className="font-mono font-semibold text-primary pl-4 flex-shrink-0">
+                  {prof.rating}
                 </span>
-                <span className="font-mono">{item.rating}</span>
               </li>
             ))}
         </ul>
