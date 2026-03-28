@@ -15,6 +15,21 @@ import { Label } from "@/components/ui/label";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
+import { z } from "zod";
+
+const loginSchema = z.object({
+  email: z
+    .string()
+    .trim()
+    .email("Enter a valid email address")
+    .refine((email) => {
+      const at = email.lastIndexOf("@");
+      if (at === -1) return false;
+      const domain = email.slice(at + 1).toLowerCase();
+      return domain.endsWith("ethz.ch");
+    }, "Email must be an ETH Zurich address ending in ethz.ch"),
+  password: z.string().min(1, "Password is required"),
+});
 
 export function LoginForm({
   className,
@@ -33,13 +48,20 @@ export function LoginForm({
     setError(null);
 
     try {
+      const parsed = loginSchema.safeParse({ email, password });
+      if (!parsed.success) {
+        setError(parsed.error.issues[0]?.message ?? "Invalid input");
+        return;
+      }
+
       const { error } = await supabase.auth.signInWithPassword({
-        email,
-        password,
+        email: parsed.data.email,
+        password: parsed.data.password,
       });
       if (error) throw error;
+
       // Update this route to redirect to an authenticated route. The user already has an active session.
-      router.push("/protected");
+      router.push("/dashboard");
     } catch (error: unknown) {
       setError(error instanceof Error ? error.message : "An error occurred");
     } finally {
@@ -64,7 +86,7 @@ export function LoginForm({
                 <Input
                   id="email"
                   type="email"
-                  placeholder="m@example.com"
+                  placeholder="name@student.ethz.ch"
                   required
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}

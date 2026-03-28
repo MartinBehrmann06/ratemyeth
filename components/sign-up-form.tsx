@@ -15,11 +15,42 @@ import { Label } from "@/components/ui/label";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
+import { z } from "zod";
+
+const signUpSchema = z
+  .object({
+    username: z
+      .string()
+      .trim()
+      .min(2, "Username must be at least 2 characters")
+      .max(32, "Username is too long")
+      .regex(
+        /^[a-zA-Z0-9_-]+$/,
+        "Use letters, numbers, underscores, or hyphens only",
+      ),
+    email: z
+      .string()
+      .trim()
+      .email("Enter a valid email address")
+      .refine((email) => {
+        const at = email.lastIndexOf("@");
+        if (at === -1) return false;
+        const domain = email.slice(at + 1).toLowerCase();
+        return domain.endsWith("ethz.ch");
+      }, "Email must be an ETH Zurich address ending in ethz.ch"),
+    password: z.string().min(8, "Password must be at least 8 characters"),
+    repeatPassword: z.string().min(1, "Please repeat your password"),
+  })
+  .refine((v) => v.password === v.repeatPassword, {
+    message: "Passwords do not match",
+    path: ["repeatPassword"],
+  });
 
 export function SignUpForm({
   className,
   ...props
 }: React.ComponentPropsWithoutRef<"div">) {
+  const [username, setUsername] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [repeatPassword, setRepeatPassword] = useState("");
@@ -33,18 +64,26 @@ export function SignUpForm({
     setIsLoading(true);
     setError(null);
 
-    if (password !== repeatPassword) {
-      setError("Passwords do not match");
-      setIsLoading(false);
-      return;
-    }
-
     try {
-      const { error } = await supabase.auth.signUp({
+      const parsed = signUpSchema.safeParse({
+        username,
         email,
         password,
+        repeatPassword,
+      });
+      if (!parsed.success) {
+        setError(parsed.error.issues[0]?.message ?? "Invalid input");
+        return;
+      }
+
+      const { error } = await supabase.auth.signUp({
+        email: parsed.data.email,
+        password: parsed.data.password,
         options: {
-          emailRedirectTo: `${window.location.origin}/protected`,
+          emailRedirectTo: `${window.location.origin}/dashboard`,
+          data: {
+            username: parsed.data.username,
+          },
         },
       });
       if (error) throw error;
@@ -67,11 +106,23 @@ export function SignUpForm({
           <form onSubmit={handleSignUp}>
             <div className="flex flex-col gap-6">
               <div className="grid gap-2">
+                <Label htmlFor="username">Username</Label>
+                <Input
+                  id="username"
+                  type="text"
+                  autoComplete="username"
+                  placeholder="e.g. ada_eth"
+                  required
+                  value={username}
+                  onChange={(e) => setUsername(e.target.value)}
+                />
+              </div>
+              <div className="grid gap-2">
                 <Label htmlFor="email">Email</Label>
                 <Input
                   id="email"
                   type="email"
-                  placeholder="m@example.com"
+                  placeholder="name@student.ethz.ch"
                   required
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
